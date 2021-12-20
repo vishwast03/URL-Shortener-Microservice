@@ -3,7 +3,6 @@ const express = require('express');
 const mongo = require('mongodb');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
-const shortId = require('shortid');
 const dns = require('dns');
 const url = require('url');
 const cors = require('cors');
@@ -61,49 +60,54 @@ app.post('/api/shorturl', async function(req, res) {
   let urlCode = await URL.count();
   urlCode++;
 
-  const lookupPromise = new Promise((resolve, reject) => {
-    dns.lookup(parsedLookupUrl.protocol ? parsedLookupUrl.host
-                : parsedLookupUrl.path, (err, address, family) => {
-                  if(err) reject(err);
-                  resolve(address);
-    });
-  });
+  if(parsedLookupUrl.protocol == "http:" || parsedLookupUrl.protocol == "https:") {
 
-  lookupPromise.then(
-    async function (address) {
-      try {
-        // check for presense in database
-        let findOne = await URL.findOne({
-          original_url: lookupUrl
-        });
-        if(findOne) {
-          res.json({
-            original_url: findOne.original_url,
-            short_url: findOne.short_url
+    const lookupPromise = new Promise((resolve, reject) => {
+      dns.lookup(parsedLookupUrl.host, (err, address, family) => {
+        if(err) reject(err);
+        resolve(address);
+      });
+    });
+
+    lookupPromise.then(
+      async function (address) {
+        try {
+          // check for presense in database
+          let findOne = await URL.findOne({
+            original_url: lookupUrl
           });
+          if(findOne) {
+            res.json({
+              original_url: findOne.original_url,
+              short_url: findOne.short_url
+            });
+          }
+          else {
+            // if the url doesn't exist in database, create new one
+            findOne = new URL({
+              original_url: lookupUrl,
+              short_url: urlCode
+            });
+            await findOne.save();
+            res.json({
+              original_url: findOne.original_url,
+              short_url: findOne.short_url
+            });
+          }
         }
-        else {
-          // if the url doesn't exist in database, create new one
-          findOne = new URL({
-            original_url: lookupUrl,
-            short_url: urlCode
-          });
-          await findOne.save();
-          res.json({
-            original_url: findOne.original_url,
-            short_url: findOne.short_url
-          });
+        catch(err) {
+          console.error(err);
+          res.statur(500).json('Server error...');
         }
+      },
+      (err) => {
+        res.json({ error: 'invalid url' });
       }
-      catch(err) {
-        console.error(err);
-        res.statur(500).json('Server error...');
-      }
-    },
-    (err) => {
-      res.status(401).json({error: 'Invalid URL'});
-    }
-  );
+    );
+  }
+  else {
+    res.json({ error: 'invalid url' });
+  }
 });
 
 app.get('/api/shorturl/:short_url?', async function(req, res) {
