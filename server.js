@@ -6,13 +6,8 @@ const bodyParser = require('body-parser');
 const shortId = require('shortid');
 const dns = require('dns');
 const url = require('url');
-// const validUrl = require('valid-url')
 const cors = require('cors');
 const app = express();
-
-
-// const URI = require("url").URL;
-// const urlExists = require("url-exists");
 
 // Basic Configuration
 const port = process.env.PORT || 3000;
@@ -53,15 +48,18 @@ connection.on('open', () => {
 const Schema = mongoose.Schema;
 const urlSchema = new Schema({
     original_url: String,
-    short_url: String
+    short_url: Number
 });
 const URL = mongoose.model("URL", urlSchema);
 
-app.post('/api/shorturl', (req, res) => {
+// api endpoint
+app.post('/api/shorturl', async function(req, res) {
 
   const lookupUrl = req.body.url;
   const parsedLookupUrl = url.parse(lookupUrl);
-  const urlCode = shortId.generate();
+  
+  let urlCode = await URL.count();
+  urlCode++;
 
   const lookupPromise = new Promise((resolve, reject) => {
     dns.lookup(parsedLookupUrl.protocol ? parsedLookupUrl.host
